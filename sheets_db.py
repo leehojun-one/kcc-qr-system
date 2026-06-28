@@ -15,7 +15,7 @@ import streamlit as st
 
 from util import now_kst_str
 # 백엔드와 무관한 상수/계산은 db.py 의 것을 재사용
-from db import FAULTS, FAULTS_PRE, ISSUE_TYPES, STATUS, VENDORS, VENDOR_BASELINE, baseline  # noqa: F401
+from db import FAULTS, FAULTS_PRE, ISSUE_TYPES, STATUS, STATUS_FLOW, VENDORS, VENDOR_BASELINE, baseline  # noqa: F401
 
 # 탭(워크시트)별 헤더 — 컬럼 순서가 곧 행 순서
 TABS = {

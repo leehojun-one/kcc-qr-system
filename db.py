@@ -23,7 +23,8 @@ from datetime import datetime, timedelta
 DB_PATH = os.path.join(os.path.dirname(__file__), "kcc_qr.db")
 
 FAULTS = ["공장 오제작", "오출고·미출고", "실측 오류", "영업 주문실수"]
-STATUS = ["접수", "가공처확인", "처리예정", "처리완료"]
+STATUS = ["접수", "접수확인", "생산중", "배송중", "현장도착", "완료"]
+STATUS_FLOW = ["접수", "접수확인", "생산중", "배송중", "현장도착", "완료"]
 ISSUE_TYPES = ["당일사고", "입주전AS"]   # 시공팀(현장) 앱에서 신고하는 유형
 # 입주전AS는 운반/타공정 훼손 귀책이 추가로 발생
 FAULTS_PRE = FAULTS + ["운반·시공 파손", "타공정 훼손"]
