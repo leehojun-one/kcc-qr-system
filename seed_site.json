@@ -1,0 +1,159 @@
+{
+  "quote_no": "900000-002336-280-001",
+  "order_no": "",
+  "team": "서울",
+  "sales_rep": "박종한",
+  "sales_phone": "01040096860",
+  "constructor": "다솔창호",
+  "constructor_phone": "010-3543-4281",
+  "vendor": "미성산업",
+  "order_date": "2026-06-26",
+  "address": "서울특별시 서초구 방배로 14 (방배동, 임광아파트)3동 407호",
+  "install_date": "2026-07-13",
+  "windows": [
+    {
+      "seq": 1,
+      "location": "1번 거실발코니",
+      "model": "HW ONE(V)_HBF251D",
+      "width": "3435",
+      "height": "2300",
+      "qty": "1"
+    },
+    {
+      "seq": 2,
+      "location": "2번 거실터닝도어",
+      "model": "HW ONE(V)_HDF140",
+      "width": "800",
+      "height": "2050",
+      "qty": "1"
+    },
+    {
+      "seq": 3,
+      "location": "3번 안방발코니",
+      "model": "HW ONE(V)_HBF141S",
+      "width": "3150",
+      "height": "1300",
+      "qty": "1"
+    },
+    {
+      "seq": 4,
+      "location": "3번 안방발코니픽스",
+      "model": "HW ONE(V)_고정창",
+      "width": "1055",
+      "height": "1000",
+      "qty": "2"
+    },
+    {
+      "seq": 5,
+      "location": "4번 안방발코니픽스",
+      "model": "HW ONE(V)_고정창",
+      "width": "600",
+      "height": "1300",
+      "qty": "1"
+    },
+    {
+      "seq": 6,
+      "location": "5번 안방내창",
+      "model": "HW ONE(V)_BF230R",
+      "width": "2280",
+      "height": "1100",
+      "qty": "1"
+    },
+    {
+      "seq": 7,
+      "location": "6번 침실2",
+      "model": "HW ONE(V)_HBF251D",
+      "width": "1150",
+      "height": "1160",
+      "qty": "1"
+    },
+    {
+      "seq": 8,
+      "location": "7번 주방싱크창",
+      "model": "HW ONE(V)_HBF251D",
+      "width": "1140",
+      "height": "560",
+      "qty": "1"
+    },
+    {
+      "seq": 9,
+      "location": "8번 보조주방",
+      "model": "HW ONE(V)_HBF251D",
+      "width": "850",
+      "height": "1170",
+      "qty": "1"
+    },
+    {
+      "seq": 10,
+      "location": "9번 실외기실터닝",
+      "model": "HW ONE(V)_HDF140",
+      "width": "750",
+      "height": "2050",
+      "qty": "1"
+    },
+    {
+      "seq": 11,
+      "location": "10번 실외기실PJ",
+      "model": "HW ONE(V)_CB-100*45",
+      "width": "600",
+      "height": "1240",
+      "qty": "1"
+    },
+    {
+      "seq": 12,
+      "location": "10번 실외기실PJ",
+      "model": "HW ONE(V)_P/J",
+      "width": "505",
+      "height": "600",
+      "qty": "1"
+    },
+    {
+      "seq": 13,
+      "location": "10번 실외기실PJ",
+      "model": "HW ONE(V)_고정창",
+      "width": "505",
+      "height": "545",
+      "qty": "1"
+    },
+    {
+      "seq": 14,
+      "location": "11번 실외기실픽스",
+      "model": "HW ONE(V)_고정창",
+      "width": "600",
+      "height": "1100",
+      "qty": "1"
+    },
+    {
+      "seq": 15,
+      "location": "12번 AC그릴창",
+      "model": "HW ONE(V)_CB-100*45",
+      "width": "1000",
+      "height": "2340",
+      "qty": "1"
+    },
+    {
+      "seq": 16,
+      "location": "13번 실외기실픽스",
+      "model": "HW ONE(V)_고정창",
+      "width": "1300",
+      "height": "2340",
+      "qty": "1"
+    },
+    {
+      "seq": 17,
+      "location": "14번 침실3",
+      "model": "HW ONE(V)_BF225TM",
+      "width": "980",
+      "height": "1750",
+      "qty": "1"
+    },
+    {
+      "seq": 18,
+      "location": "15번 침실1",
+      "model": "HW ONE(V)_HBF251D",
+      "width": "1440",
+      "height": "1160",
+      "qty": "1"
+    }
+  ]
+}
