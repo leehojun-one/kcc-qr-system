@@ -99,6 +99,8 @@ def seed_if_empty():
     # 1) 실데이터: 방배 임광 현장
     real = json.load(open(os.path.join(os.path.dirname(__file__), "seed_site.json"), encoding="utf-8"))
     _add_site(c, real)
+    c.execute("UPDATE sites SET qr_serial=? WHERE quote_no=?",
+              ("KCCQR-002336", real["quote_no"]))
 
     # 2) 데모용 합성 현장 (대시보드를 살리기 위함)
     synth = [

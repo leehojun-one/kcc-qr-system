@@ -19,6 +19,23 @@ import sheets_db
 from barcode_qr import make_barcode_png, make_qr_png, make_qr_sheet_pdf
 import parser as order_parser
 
+try:
+    from streamlit_qrcode_scanner import qrcode_scanner
+    HAS_SCANNER = True
+except Exception:
+    HAS_SCANNER = False
+
+
+def parse_scanned_serial(text):
+    """스캔/입력된 QR 텍스트에서 일련번호(KCCQR-xxxx)만 뽑기.
+    URL(...?qr=KCCQR-0001)이든 일련번호 자체든 모두 처리."""
+    if not text:
+        return ""
+    text = text.strip()
+    if "qr=" in text:
+        text = text.split("qr=", 1)[1].split("&")[0]
+    return text.strip()
+
 SYMPTOMS = ["새바람(틈새풍)", "물방울(결로)", "빗물 샘", "핸들 불량", "구동 불량(뻑뻑함)", "잠금 불량", "소음"]
 
 st.set_page_config(page_title="KCC 창호 QR 관제", page_icon="🪟", layout="wide")
@@ -129,52 +146,95 @@ if role.startswith("①"):
 
     with tab1:
         st.subheader("현장 등록")
-        st.caption("발주서 바코드 스캔 → 거실 메인창 QR 스캔 → 현장 데이터 1:1 매칭")
-        pick = st.selectbox("발주서 바코드(창호견적번호) 스캔", list(site_map.keys()))
-        qno = site_map[pick]
-        site = db.get_site(qno)
+        st.caption("① 발주서 바코드 → ② 거실 메인창 QR 스캔 → 1:1 매칭")
+        use_cam = st.toggle("📷 카메라 스캔 사용", value=False,
+                            help="끄면 번호 선택/입력 방식. 폰에서 카메라가 안 켜지면 끄고 진행하세요.")
+        if use_cam and not HAS_SCANNER:
+            st.warning("이 환경에서 카메라 스캐너를 불러오지 못했어요. 번호 입력으로 진행합니다.")
+            use_cam = False
 
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            st.markdown("**발주서 바코드 (오더번호 칸)**")
-            st.image(make_barcode_png(qno), caption=f"Code128 · {qno}", width=320)
-        with col2:
-            serial = f"KCCQR-{qno.split('-')[1]}"
-            qr_payload = f"{BASE_URL}?qr={serial}" if BASE_URL else serial
-            st.markdown("**거실 메인창 보증스티커 QR**")
-            st.image(make_qr_png(qr_payload), caption=f"일련번호 {serial}", width=160)
-            if BASE_URL:
-                st.caption(f"📷 폰으로 찍으면 열림:\n{BASE_URL}?qr={serial}")
+        reg_qno = st.session_state.get("reg_qno")
+
+        # ── STEP 1: 발주서 바코드 ──
+        if not reg_qno:
+            st.markdown("**① 발주서 바코드 스캔**")
+            if use_cam:
+                code = qrcode_scanner(key="scan_bc")
+                if code:
+                    hit = next((s for s in sites if str(s["quote_no"]) == code.strip()), None)
+                    if hit:
+                        st.session_state["reg_qno"] = hit["quote_no"]; st.rerun()
+                    else:
+                        st.error(f"등록되지 않은 현장입니다: {code}  (관리자에서 발주서 등록 먼저)")
             else:
-                st.caption("배포 후 Secrets에 base_url 넣으면 이 QR이 앱으로 바로 연결돼요")
+                if not site_map:
+                    st.info("등록된 현장이 없어요. ⑤ 관리자에서 발주서를 먼저 올리세요.")
+                else:
+                    pick = st.selectbox("현장(견적번호) 선택", list(site_map.keys()))
+                    if st.button("이 바코드로 진행 →", type="primary"):
+                        st.session_state["reg_qno"] = site_map[pick]; st.rerun()
+
+        # ── STEP 2: 거실창 QR ──
+        else:
+            site = db.get_site(reg_qno)
+            st.success(f'① 바코드 확인 — {reg_qno} · {site["address"].split("(")[0].strip()}')
+
             if site.get("qr_serial"):
-                st.success(f"QR 연결됨: {site['qr_serial']}")
+                st.success(f'✅ ② QR 매칭 완료 — {site["qr_serial"]}')
+                st.caption("이 현장은 이제 '당일사고 등록' 대상이 됩니다.")
             else:
-                if st.button("✅ 이 현장에 QR 연결", type="primary"):
-                    db.link_qr(qno, serial)
-                    st.success("연결 완료 — 이제 이 QR을 스캔하면 이 집 화면이 뜸")
-                    st.rerun()
+                st.markdown("**② 거실 메인창 QR 스캔 (매칭)**")
+                if use_cam:
+                    qr = qrcode_scanner(key="scan_qr")
+                    if qr:
+                        serial = parse_scanned_serial(qr)
+                        db.link_qr(reg_qno, serial)
+                        st.success(f"매칭 완료 — {serial}"); st.rerun()
+                else:
+                    default_serial = f"KCCQR-{reg_qno.split('-')[1]}"
+                    serial = st.text_input("QR 일련번호 입력", value=default_serial)
+                    if st.button("✅ QR 연결 (매칭)", type="primary"):
+                        db.link_qr(reg_qno, parse_scanned_serial(serial))
+                        st.success("매칭 완료"); st.rerun()
 
-        st.divider()
-        st.markdown("**현장 정보** (단가 제외)")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("소속팀 / 영업", f'{site["team"]} · {site["sales_rep"]}')
-        c2.metric("시공업체", site["constructor"])
-        c3.metric("가공처", site["vendor"])
-        st.write(f'📍 {site["address"]}')
-        st.write(f'🗓️ 발주 {site["order_date"]} · 시공 {site["install_date"]}')
+            if st.button("↩️ 다른 현장 등록"):
+                del st.session_state["reg_qno"]; st.rerun()
 
-        st.markdown("**창호 목록** (설치위치 = 고객 A/S 체크박스 소스)")
-        st.dataframe(
-            [{"순번": w["seq"], "설치위치": w["location"], "모델": w["model"],
-              "W": w["width"], "H": w["height"], "수량": w["qty"]} for w in site["windows"]],
-            width='stretch', hide_index=True)
+            st.divider()
+            # 참고용: 인쇄/확인용 바코드·QR
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                st.markdown("**발주서 바코드**")
+                st.image(make_barcode_png(reg_qno), caption=f"Code128 · {reg_qno}", width=300)
+            with col2:
+                serial = site.get("qr_serial") or f"KCCQR-{reg_qno.split('-')[1]}"
+                payload = f"{BASE_URL}?qr={serial}" if BASE_URL else serial
+                st.markdown("**거실창 QR**")
+                st.image(make_qr_png(payload), caption=f"{serial}", width=150)
+
+            st.divider()
+            st.markdown("**현장 정보** (단가 제외)")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("소속팀 / 영업", f'{site["team"]} · {site["sales_rep"]}')
+            c2.metric("시공업체", site["constructor"])
+            c3.metric("가공처", site["vendor"])
+            st.write(f'📍 {site["address"]}')
+            st.dataframe(
+                [{"순번": w["seq"], "설치위치": w["location"], "모델": w["model"],
+                  "W": w["width"], "H": w["height"], "수량": w["qty"]} for w in site["windows"]],
+                width='stretch', hide_index=True)
 
     with tab2:
         st.subheader("당일사고 등록")
         st.caption("설치 당일 사고 = 99% 가공처 액션 → 가공처+관제센터 동시 발송")
-        pick2 = st.selectbox("현장 (바코드)", list(site_map.keys()), key="inc_site")
-        qno2 = site_map[pick2]
+        # QR 매칭(현장등록 완료)된 현장만 사고 등록 가능
+        matched = [s for s in sites if s.get("qr_serial")]
+        if not matched:
+            st.warning("아직 QR 매칭된 현장이 없습니다. '현장 등록' 탭에서 바코드+QR 매칭을 먼저 하세요.")
+            st.stop()
+        m_map = {site_label(s): s["quote_no"] for s in matched}
+        pick2 = st.selectbox("현장 (QR 매칭 완료된 현장만)", list(m_map.keys()), key="inc_site")
+        qno2 = m_map[pick2]
         site2 = db.get_site(qno2)
         locs = [w["location"] for w in site2["windows"]]
 
