@@ -157,8 +157,9 @@ if role.startswith("①"):
 
         # ── STEP 1: 발주서 바코드 ──
         if not reg_qno:
-            st.markdown("**① 발주서 바코드 스캔**")
+            st.markdown("**① 발주서 바코드**")
             if use_cam:
+                st.caption("카메라를 바코드에 비추세요. (잘 안 잡히면 아래에서 번호로 선택)")
                 code = qrcode_scanner(key="scan_bc")
                 if code:
                     hit = next((s for s in sites if str(s["quote_no"]) == code.strip()), None)
@@ -166,13 +167,13 @@ if role.startswith("①"):
                         st.session_state["reg_qno"] = hit["quote_no"]; st.rerun()
                     else:
                         st.error(f"등록되지 않은 현장입니다: {code}  (관리자에서 발주서 등록 먼저)")
+            # 번호 선택은 카메라 여부와 무관하게 항상 노출 (막히지 않게)
+            if not site_map:
+                st.info("등록된 현장이 없어요. ⑤ 관리자에서 발주서를 먼저 올리세요.")
             else:
-                if not site_map:
-                    st.info("등록된 현장이 없어요. ⑤ 관리자에서 발주서를 먼저 올리세요.")
-                else:
-                    pick = st.selectbox("현장(견적번호) 선택", list(site_map.keys()))
-                    if st.button("이 바코드로 진행 →", type="primary"):
-                        st.session_state["reg_qno"] = site_map[pick]; st.rerun()
+                pick = st.selectbox("현장(견적번호) 선택", list(site_map.keys()))
+                if st.button("이 현장으로 진행 →", type="primary"):
+                    st.session_state["reg_qno"] = site_map[pick]; st.rerun()
 
         # ── STEP 2: 거실창 QR ──
         else:
@@ -183,19 +184,20 @@ if role.startswith("①"):
                 st.success(f'✅ ② QR 매칭 완료 — {site["qr_serial"]}')
                 st.caption("이 현장은 이제 '당일사고 등록' 대상이 됩니다.")
             else:
-                st.markdown("**② 거실 메인창 QR 스캔 (매칭)**")
+                st.markdown("**② 거실 메인창 QR (매칭)**")
                 if use_cam:
+                    st.caption("QR 스티커를 카메라에 비추세요. (잘 안 잡히면 아래에 번호 입력)")
                     qr = qrcode_scanner(key="scan_qr")
                     if qr:
                         serial = parse_scanned_serial(qr)
                         db.link_qr(reg_qno, serial)
                         st.success(f"매칭 완료 — {serial}"); st.rerun()
-                else:
-                    default_serial = f"KCCQR-{reg_qno.split('-')[1]}"
-                    serial = st.text_input("QR 일련번호 입력", value=default_serial)
-                    if st.button("✅ QR 연결 (매칭)", type="primary"):
-                        db.link_qr(reg_qno, parse_scanned_serial(serial))
-                        st.success("매칭 완료"); st.rerun()
+                # 번호 입력은 항상 노출
+                default_serial = f"KCCQR-{reg_qno.split('-')[1]}"
+                serial = st.text_input("QR 일련번호 입력", value=default_serial)
+                if st.button("✅ QR 연결 (매칭)", type="primary"):
+                    db.link_qr(reg_qno, parse_scanned_serial(serial))
+                    st.success("매칭 완료"); st.rerun()
 
             if st.button("↩️ 다른 현장 등록"):
                 del st.session_state["reg_qno"]; st.rerun()
@@ -521,7 +523,7 @@ elif role.startswith("⑤"):
 elif role.startswith("⑥"):
     st.header("⑥ 가공처")
     sites = db.all_sites()
-    vendors = sorted({s["vendor"] for s in sites if s.get("vendor")})
+    vendors = db.VENDORS
     vendor = st.selectbox("가공처 선택", vendors) if vendors else None
     st.caption("내게 접수된 사고를 확인하고 처리예정/완료를 입력 (파일럿: 앱 내 알람·피드백)")
 
