@@ -530,7 +530,8 @@ elif role.startswith("⑥"):
     vendor = st.selectbox("가공처 선택", vendors) if vendors else None
     st.caption("내게 접수된 사고를 확인하고 처리예정/완료를 입력 (파일럿: 앱 내 알람·피드백)")
 
-    incidents = [i for i in db.all_incidents() if i.get("vendor") == vendor]
+    incidents = [i for i in db.all_incidents()
+                 if vendor and vendor in str(i.get("vendor") or "")]
     new_cnt = len([i for i in incidents if i["status"] == "접수"])
     if new_cnt:
         st.error(f"🔔 새 사고 {new_cnt}건 — 접수확인이 필요합니다")

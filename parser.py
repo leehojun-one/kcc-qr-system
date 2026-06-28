@@ -45,17 +45,17 @@ def parse_order_sheet(path):
         "windows": [],
     }
 
-    # 창호 블록: 데이터행의 B열(순번)이 정수. 3행 단위(데이터/보조/비고)로 반복.
+    # 창호 블록: 데이터행의 B열(순번)이 숫자(정수 또는 '1' 같은 텍스트). 3행 단위 반복.
     for r in range(14, ws.max_row + 1):
-        seq = ws.cell(row=r, column=2).value      # B: 순번
-        if not isinstance(seq, int):
+        seq_str = _s(ws.cell(row=r, column=2).value)    # B: 순번
+        if not seq_str.isdigit():
             continue
         location = _s(ws.cell(row=r, column=3).value)   # C: 설치위치
         if not location:
             # 설치위치 없음 = 실측비/철거/양중/부자재 → A/S 대상 아님, 제외
             continue
         site["windows"].append({
-            "seq": seq,
+            "seq": int(seq_str),
             "location": location,
             "model": _s(ws.cell(row=r, column=4).value),   # D: 모델명
             "width": _s(ws.cell(row=r, column=7).value),   # G: 길이(W)
