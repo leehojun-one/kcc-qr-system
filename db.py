@@ -212,6 +212,26 @@ def all_sites():
     return rows
 
 
+def add_site(site):
+    """발주서 파싱 결과(site dict, windows 포함)를 등록/갱신."""
+    c = conn()
+    _add_site(c, site)
+    c.commit()
+    c.close()
+
+
+ALLOWED_INC_FIELDS = {"status", "vendor_schedule", "done_photo", "confirmed_at", "fault_confirmed"}
+
+
+def update_incident_field(iid, field, value):
+    if field not in ALLOWED_INC_FIELDS:
+        return
+    c = conn()
+    c.execute(f"UPDATE incidents SET {field}=? WHERE id=?", (value, iid))
+    c.commit()
+    c.close()
+
+
 def link_qr(quote_no, serial):
     c = conn()
     c.execute("UPDATE sites SET qr_serial=? WHERE quote_no=?", (serial, quote_no))

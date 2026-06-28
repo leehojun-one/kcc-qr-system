@@ -139,6 +139,34 @@ def get_registration(quote_no):
 
 
 # ───────────────────── 쓰기 ─────────────────────
+def add_site(site):
+    """발주서 파싱 결과를 시트에 등록(있으면 갱신). windows 포함."""
+    ws_s, row = _find_row("sites", "quote_no", site["quote_no"])
+    if row:  # 기존 현장: 헤더 순서대로 셀 갱신
+        for col, h in enumerate(TABS["sites"], start=1):
+            ws_s.update_cell(row, col, site.get(h, ""))
+    else:
+        _ws("sites").append_row(_row_for("sites", site), value_input_option=RAW)
+    # 창호: 기존 동일 quote_no 행 삭제 후 재적재는 복잡 → 없을 때만 적재
+    existing = [w for w in _rows("windows") if str(w["quote_no"]) == str(site["quote_no"])]
+    if not existing and site.get("windows"):
+        rows = [_row_for("windows", {**w, "quote_no": site["quote_no"]}) for w in site["windows"]]
+        _ws("windows").append_rows(rows, value_input_option=RAW)
+    _invalidate()
+
+
+ALLOWED_INC_FIELDS = {"status", "vendor_schedule", "done_photo", "confirmed_at", "fault_confirmed"}
+
+
+def update_incident_field(iid, field, value):
+    if field not in ALLOWED_INC_FIELDS:
+        return
+    ws, row = _find_row("incidents", "id", iid)
+    if row:
+        ws.update_cell(row, TABS["incidents"].index(field) + 1, value)
+    _invalidate()
+
+
 def link_qr(quote_no, serial):
     ws, row = _find_row("sites", "quote_no", quote_no)
     if row:

@@ -16,11 +16,30 @@ import streamlit as st
 import notify
 import db as sqlite_db
 import sheets_db
-from barcode_qr import make_barcode_png, make_qr_png
+from barcode_qr import make_barcode_png, make_qr_png, make_qr_sheet_pdf
+import parser as order_parser
 
 SYMPTOMS = ["새바람(틈새풍)", "물방울(결로)", "빗물 샘", "핸들 불량", "구동 불량(뻑뻑함)", "잠금 불량", "소음"]
 
 st.set_page_config(page_title="KCC 창호 QR 관제", page_icon="🪟", layout="wide")
+
+
+def pin_gate(name, secret_key):
+    """관리자/관제용 PIN 잠금. Secrets에 없으면 로컬 기본 '0000'."""
+    if st.session_state.get(f"ok_{name}"):
+        return True
+    try:
+        pin = str(st.secrets[secret_key])
+    except Exception:
+        pin = "0000"
+    e = st.text_input("🔒 PIN 입력", type="password", key=f"pin_{name}")
+    if e and e == pin:
+        st.session_state[f"ok_{name}"] = True
+        return True
+    if e:
+        st.error("PIN이 틀렸습니다.")
+    st.caption("본사 전용 화면입니다. (로컬 기본 PIN: 0000 · 배포 시 Secrets에 설정)")
+    return False
 
 
 def _pick_backend():
@@ -91,7 +110,8 @@ elif role_q == "customer":
         st.query_params.clear(); st.rerun()
 else:
     role = st.sidebar.radio("화면 선택",
-                            ["① 시공팀 앱", "② 파트너사 앱", "③ 고객 앱", "④ 관제센터"])
+                            ["① 시공팀 앱", "② 파트너사 앱", "③ 고객 앱",
+                             "④ 관제센터", "⑤ 관리자(발행)", "⑥ 가공처", "⑦ 영업사원"])
 st.sidebar.caption("프로토타입 · 카톡 발송은 시뮬레이션")
 if USE_SHEETS:
     st.sidebar.caption("🗄️ 저장소: 구글시트 (영구 · KST)")
@@ -258,11 +278,13 @@ elif role.startswith("③"):
                 st.error("창과 증상을 하나 이상 선택해주세요.")
 
 
-# ═══════════════════════ ③ 관제센터 ═══════════════════════
-else:
+# ═══════════════════════ ④ 관제센터 ═══════════════════════
+elif role.startswith("④"):
     from datetime import datetime
 
     st.header("④ 본사 관제센터")
+    if not pin_gate("control", "control_pin"):
+        st.stop()
     sites = db.all_sites()
     incidents = db.all_incidents()
     vendor_base, total_base = db.baseline()
@@ -379,3 +401,123 @@ else:
             [{"접수시각": a["created_at"], "창": a["locations"], "증상": a["symptoms"],
               "직접입력": a["note"]} for a in asr],
             width='stretch', hide_index=True)
+
+
+# ═══════════════════════ ⑤ 관리자 (발행) ═══════════════════════
+elif role.startswith("⑤"):
+    st.header("⑤ 관리자 — 바코드·QR 발행")
+    if not pin_gate("admin", "admin_pin"):
+        st.stop()
+    st.caption("견적프로그램 연동 전 임시 발행 도구. 발주서를 올리면 현장 등록 + 바코드 발행.")
+    tabA, tabB = st.tabs(["📤 발주서 업로드 → 바코드", "🏷️ QR 100장 일괄 발행"])
+
+    with tabA:
+        up = st.file_uploader("시공발주서 (.xlsx)", type=["xlsx"])
+        if up is not None:
+            import tempfile, os
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tf:
+                tf.write(up.getbuffer())
+                tmp_path = tf.name
+            try:
+                site = order_parser.parse_order_sheet(tmp_path)
+            finally:
+                os.unlink(tmp_path)
+            st.success(f'파싱 완료 — {site["quote_no"]} · 창호 {len(site["windows"])}개')
+            st.write(f'📍 {site["address"]}  ·  {site["team"]}/{site["sales_rep"]} · 가공처 {site["vendor"]}')
+            if st.button("이 현장 등록 + 바코드 발행", type="primary"):
+                db.add_site(site)
+                st.success("현장 등록 완료")
+            bc = make_barcode_png(site["quote_no"])
+            st.image(bc, caption=f'바코드 · {site["quote_no"]}', width=320)
+            st.download_button("⬇️ 바코드 PNG 다운로드", bc,
+                               file_name=f'barcode_{site["quote_no"]}.png', mime="image/png")
+        st.divider()
+        st.markdown("**기존 등록 현장 바코드 다시 받기**")
+        sites = db.all_sites()
+        if sites:
+            smap = {site_label(s): s["quote_no"] for s in sites}
+            pk = st.selectbox("현장", list(smap.keys()))
+            bc2 = make_barcode_png(smap[pk])
+            st.image(bc2, width=300)
+            st.download_button("⬇️ 바코드 PNG", bc2,
+                               file_name=f"barcode_{smap[pk]}.png", mime="image/png", key="dl2")
+
+    with tabB:
+        st.caption("빈 고유번호 QR을 미리 대량 발행 → 인쇄해두고 현장에서 바코드와 매칭")
+        c1, c2 = st.columns(2)
+        start = c1.number_input("시작 번호", min_value=1, value=1, step=1)
+        count = c2.number_input("발행 장수", min_value=1, max_value=500, value=100, step=10)
+        if not BASE_URL:
+            st.warning("아직 base_url 미설정 — QR엔 일련번호만 담깁니다. Secrets에 base_url 넣으면 스캔 시 앱이 열려요.")
+        if st.button("QR 일괄 생성 (PDF)", type="primary"):
+            serials = [f"KCCQR-{i:04d}" for i in range(int(start), int(start) + int(count))]
+            pdf = make_qr_sheet_pdf(serials, base_url=BASE_URL)
+            st.success(f"{len(serials)}장 생성 완료")
+            st.download_button("⬇️ QR 시트 PDF 다운로드", pdf,
+                               file_name=f"QR_{serials[0]}_{serials[-1]}.pdf", mime="application/pdf")
+
+
+# ═══════════════════════ ⑥ 가공처 ═══════════════════════
+elif role.startswith("⑥"):
+    st.header("⑥ 가공처")
+    sites = db.all_sites()
+    vendors = sorted({s["vendor"] for s in sites if s.get("vendor")})
+    vendor = st.selectbox("가공처 선택", vendors) if vendors else None
+    st.caption("내게 접수된 사고를 확인하고 처리예정/완료를 입력 (파일럿: 앱 내 알람·피드백)")
+
+    incidents = [i for i in db.all_incidents() if i.get("vendor") == vendor]
+    new_cnt = len([i for i in incidents if i["status"] == "접수"])
+    if new_cnt:
+        st.error(f"🔔 새 사고 {new_cnt}건 — 접수확인이 필요합니다")
+    if not incidents:
+        st.info("접수된 사고가 없습니다.")
+
+    for i in incidents:
+        site = db.get_site(i["quote_no"])
+        with st.container(border=True):
+            head = "🚨 당일사고" if i["issue_type"] == "당일사고" else "🟡 입주전AS"
+            st.write(f'{head} · **{site["address"].split("(")[0].strip()}** · {i["window_location"]}')
+            st.caption(f'사유: {i["fault_provisional"]} · 신고: {i["reporter"]} · 상태: {i["status"]} · {i["created_at"]}')
+            cc1, cc2, cc3 = st.columns(3)
+            if i["status"] == "접수":
+                if cc1.button("✅ 접수확인", key=f"v_ack{i['id']}", type="primary"):
+                    db.set_incident_status(i["id"], "가공처확인"); st.rerun()
+            sched = cc2.text_input("처리예정일", value=i.get("vendor_schedule", ""), key=f"sch{i['id']}",
+                                   placeholder="예: 7/15 재제작")
+            if cc2.button("일정 저장", key=f"vs{i['id']}"):
+                db.update_incident_field(i["id"], "vendor_schedule", sched)
+                db.set_incident_status(i["id"], "처리예정"); st.rerun()
+            if cc3.button("처리완료", key=f"done{i['id']}"):
+                db.update_incident_field(i["id"], "done_photo", "(완료사진)")
+                db.set_incident_status(i["id"], "처리완료"); st.rerun()
+
+
+# ═══════════════════════ ⑦ 영업사원 ═══════════════════════
+else:
+    st.header("⑦ 영업사원")
+    sites = db.all_sites()
+    reps = sorted({s["sales_rep"] for s in sites if s.get("sales_rep")})
+    rep = st.selectbox("영업사원 선택", reps) if reps else None
+    st.caption("내 담당 현장의 사고/AS를 열람 (처리는 가공처·관제, 영업은 상황 파악 전용)")
+
+    my_qnos = {s["quote_no"] for s in sites if s["sales_rep"] == rep}
+    my_inc = [i for i in db.all_incidents() if i["quote_no"] in my_qnos]
+    open_cnt = len([i for i in my_inc if i["status"] != "처리완료"])
+    c1, c2 = st.columns(2)
+    c1.metric("내 담당 사고", f"{len(my_inc)}건")
+    c2.metric("처리중", f"{open_cnt}건")
+
+    if my_inc:
+        st.subheader("사고/AS 현황")
+        st.dataframe([{
+            "유형": i["issue_type"],
+            "현장": db.get_site(i["quote_no"])["address"].split("(")[0].strip(),
+            "창": i["window_location"],
+            "사유": i["fault_provisional"],
+            "확정": i["fault_confirmed"] or "검토중",
+            "상태": i["status"],
+            "예정": i.get("vendor_schedule", ""),
+            "접수": i["created_at"],
+        } for i in my_inc], width='stretch', hide_index=True)
+    else:
+        st.info("담당 현장에 사고가 없습니다.")
