@@ -139,14 +139,14 @@ else:
 # ═══════════════════════ ① 시공팀 앱 ═══════════════════════
 if role.startswith("①"):
     st.header("① 시공팀 앱")
-    tab1, tab2 = st.tabs(["📷 현장 등록 (바코드+QR)", "🚨 당일사고 등록"])
+    tab1, tab2 = st.tabs(["📷 현장 등록 (QR 매칭)", "🚨 당일사고 등록"])
 
     sites = db.all_sites()
     site_map = {site_label(s): s["quote_no"] for s in sites}
 
     with tab1:
         st.subheader("현장 등록")
-        st.caption("① 발주서 바코드 → ② 거실 메인창 QR 스캔 → 1:1 매칭")
+        st.caption("1️⃣ 현장 QR(발주서) → 2️⃣ 보증 QR(거실창) → 1:1 매칭")
         use_cam = st.toggle("📷 카메라 스캔 사용", value=False,
                             help="끄면 번호 선택/입력 방식. 폰에서 카메라가 안 켜지면 끄고 진행하세요.")
         if use_cam and not HAS_SCANNER:
@@ -155,19 +155,20 @@ if role.startswith("①"):
 
         reg_qno = st.session_state.get("reg_qno")
 
-        # ── STEP 1: 발주서 바코드 ──
+        # ── STEP 1: 발주서 (견적번호 선택 / 발주서 QR 스캔) ──
         if not reg_qno:
-            st.markdown("**① 발주서 바코드**")
+            st.markdown("**1️⃣ 현장 QR — 현장 선택**")
             if use_cam:
-                st.caption("카메라를 바코드에 비추세요. (잘 안 잡히면 아래에서 번호로 선택)")
+                st.caption("발주서의 **현장 QR**을 비추면 자동 선택됩니다. (또는 아래에서 번호 선택)")
                 code = qrcode_scanner(key="scan_bc")
                 if code:
-                    hit = next((s for s in sites if str(s["quote_no"]) == code.strip()), None)
+                    val = parse_scanned_serial(code)
+                    hit = next((s for s in sites if str(s["quote_no"]) == val), None)
                     if hit:
                         st.session_state["reg_qno"] = hit["quote_no"]; st.rerun()
                     else:
-                        st.error(f"등록되지 않은 현장입니다: {code}  (관리자에서 발주서 등록 먼저)")
-            # 번호 선택은 카메라 여부와 무관하게 항상 노출 (막히지 않게)
+                        st.error(f"등록되지 않은 현장: {val}  (⑤관리자에서 발주서 등록 먼저)")
+            # 번호 선택은 항상 노출
             if not site_map:
                 st.info("등록된 현장이 없어요. ⑤ 관리자에서 발주서를 먼저 올리세요.")
             else:
@@ -178,13 +179,13 @@ if role.startswith("①"):
         # ── STEP 2: 거실창 QR ──
         else:
             site = db.get_site(reg_qno)
-            st.success(f'① 바코드 확인 — {reg_qno} · {site["address"].split("(")[0].strip()}')
+            st.success(f'1️⃣ 현장 확인 — {reg_qno} · {site["address"].split("(")[0].strip()}')
 
             if site.get("qr_serial"):
                 st.success(f'✅ ② QR 매칭 완료 — {site["qr_serial"]}')
                 st.caption("이 현장은 이제 '당일사고 등록' 대상이 됩니다.")
             else:
-                st.markdown("**② 거실 메인창 QR (매칭)**")
+                st.markdown("**2️⃣ 보증 QR — 거실창 매칭**")
                 if use_cam:
                     st.caption("QR 스티커를 카메라에 비추세요. (잘 안 잡히면 아래에 번호 입력)")
                     qr = qrcode_scanner(key="scan_qr")
@@ -203,15 +204,15 @@ if role.startswith("①"):
                 del st.session_state["reg_qno"]; st.rerun()
 
             st.divider()
-            # 참고용: 인쇄/확인용 바코드·QR
+            # 참고용: 현장 QR(발주서) + 보증 QR(거실창)
             col1, col2 = st.columns([1, 1])
             with col1:
-                st.markdown("**발주서 바코드**")
-                st.image(make_barcode_png(reg_qno), caption=f"Code128 · {reg_qno}", width=300)
+                st.markdown("🟦 **현장 QR** (발주서용)")
+                st.image(make_qr_png(reg_qno), caption=f"{reg_qno}", width=150)
             with col2:
                 serial = site.get("qr_serial") or f"KCCQR-{reg_qno.split('-')[1]}"
                 payload = f"{BASE_URL}?qr={serial}" if BASE_URL else serial
-                st.markdown("**거실창 QR**")
+                st.markdown("🟩 **보증 QR** (거실창용)")
                 st.image(make_qr_png(payload), caption=f"{serial}", width=150)
 
             st.divider()
@@ -232,7 +233,7 @@ if role.startswith("①"):
         # QR 매칭(현장등록 완료)된 현장만 사고 등록 가능
         matched = [s for s in sites if s.get("qr_serial")]
         if not matched:
-            st.warning("아직 QR 매칭된 현장이 없습니다. '현장 등록' 탭에서 바코드+QR 매칭을 먼저 하세요.")
+            st.warning("아직 QR 매칭된 현장이 없습니다. '현장 등록' 탭에서 현장 QR + 보증 QR 매칭을 먼저 하세요.")
             st.stop()
         m_map = {site_label(s): s["quote_no"] for s in matched}
         pick2 = st.selectbox("현장 (QR 매칭 완료된 현장만)", list(m_map.keys()), key="inc_site")
@@ -269,7 +270,7 @@ elif role.startswith("②"):
     if scan_qno:
         st.info("📷 QR 스캔으로 열린 현장입니다.")
 
-    pickp = st.selectbox("현장 (발주서 바코드 / QR)", keys, index=pre_idx)
+    pickp = st.selectbox("현장 (현장 QR / 견적번호)", keys, index=pre_idx)
     qnop = site_map[pickp]
     sitep = db.get_site(qnop)
     st.write(f'📍 {sitep["address"]}  ·  영업 {sitep["sales_rep"]}')
@@ -277,7 +278,8 @@ elif role.startswith("②"):
     reporter = st.selectbox("신고자 (파트너사 현장 관리자)", ["대표", "실장", "현장소장"])
     locs = [w["location"] for w in sitep["windows"]]
     win = st.selectbox("문제 창 (설치위치)", locs)
-    fault = st.radio("1차 귀책 판별 (현장 잠정)", db.FAULTS_PRE, horizontal=True)
+    fault = st.radio("구분", ["미마감", "타공정 훼손", "기타"], horizontal=True,
+                     help="자세한 내용은 특이사항에 적어주세요")
     note = st.text_area("특이사항", placeholder="예: 타공정 작업 중 거실창 프레임 스크래치")
     st.file_uploader("📸 현장 사진 첨부", type=["jpg", "jpeg", "png"])
 
@@ -467,11 +469,11 @@ elif role.startswith("④"):
 
 # ═══════════════════════ ⑤ 관리자 (발행) ═══════════════════════
 elif role.startswith("⑤"):
-    st.header("⑤ 관리자 — 바코드·QR 발행")
+    st.header("⑤ 관리자 — QR 발행")
     if not pin_gate("admin", "admin_pin"):
         st.stop()
-    st.caption("견적프로그램 연동 전 임시 발행 도구. 발주서를 올리면 현장 등록 + 바코드 발행.")
-    tabA, tabB = st.tabs(["📤 발주서 업로드 → 바코드", "🏷️ QR 100장 일괄 발행"])
+    st.caption("견적프로그램 연동 전 임시 발행 도구. 발주서를 올리면 현장 등록 + 현장 QR 발행.")
+    tabA, tabB = st.tabs(["📤 발주서 업로드 → 현장 QR", "🏷️ 보증 QR 100장 일괄 발행"])
 
     with tabA:
         up = st.file_uploader("시공발주서 (.xlsx)", type=["xlsx"])
@@ -486,26 +488,27 @@ elif role.startswith("⑤"):
                 os.unlink(tmp_path)
             st.success(f'파싱 완료 — {site["quote_no"]} · 창호 {len(site["windows"])}개')
             st.write(f'📍 {site["address"]}  ·  {site["team"]}/{site["sales_rep"]} · 가공처 {site["vendor"]}')
-            if st.button("이 현장 등록 + 바코드 발행", type="primary"):
+            if st.button("이 현장 등록 + 현장 QR 발행", type="primary"):
                 db.add_site(site)
                 st.success("현장 등록 완료")
-            bc = make_barcode_png(site["quote_no"])
-            st.image(bc, caption=f'바코드 · {site["quote_no"]}', width=320)
-            st.download_button("⬇️ 바코드 PNG 다운로드", bc,
-                               file_name=f'barcode_{site["quote_no"]}.png', mime="image/png")
+            qrc = make_qr_png(site["quote_no"])
+            st.markdown("🟦 **현장 QR** (발주서에 부착 · 시공팀이 스캔)")
+            st.image(qrc, caption=f'{site["quote_no"]}', width=180)
+            st.download_button("⬇️ 현장 QR PNG 다운로드", qrc,
+                               file_name=f'siteqr_{site["quote_no"]}.png', mime="image/png")
         st.divider()
-        st.markdown("**기존 등록 현장 바코드 다시 받기**")
+        st.markdown("**기존 등록 현장 — 현장 QR 다시 받기**")
         sites = db.all_sites()
         if sites:
             smap = {site_label(s): s["quote_no"] for s in sites}
             pk = st.selectbox("현장", list(smap.keys()))
-            bc2 = make_barcode_png(smap[pk])
-            st.image(bc2, width=300)
-            st.download_button("⬇️ 바코드 PNG", bc2,
-                               file_name=f"barcode_{smap[pk]}.png", mime="image/png", key="dl2")
+            qr2 = make_qr_png(smap[pk])
+            st.image(qr2, caption=f"현장 QR · {smap[pk]}", width=160)
+            st.download_button("⬇️ 현장 QR PNG", qr2,
+                               file_name=f"siteqr_{smap[pk]}.png", mime="image/png", key="dlq2")
 
     with tabB:
-        st.caption("빈 고유번호 QR을 미리 대량 발행 → 인쇄해두고 현장에서 바코드와 매칭")
+        st.caption("빈 고유번호 보증 QR을 미리 대량 발행 → 인쇄해두고 현장에서 매칭")
         c1, c2 = st.columns(2)
         start = c1.number_input("시작 번호", min_value=1, value=1, step=1)
         count = c2.number_input("발행 장수", min_value=1, max_value=500, value=100, step=10)
@@ -523,7 +526,7 @@ elif role.startswith("⑤"):
 elif role.startswith("⑥"):
     st.header("⑥ 가공처")
     sites = db.all_sites()
-    vendors = db.VENDORS
+    vendors = sqlite_db.VENDORS
     vendor = st.selectbox("가공처 선택", vendors) if vendors else None
     st.caption("내게 접수된 사고를 확인하고 처리예정/완료를 입력 (파일럿: 앱 내 알람·피드백)")
 
